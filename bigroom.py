@@ -5,14 +5,13 @@ __module_description__ = "hide irrelevant join/part/nickchanges in noisy channel
 Big Room Plugin for XChat
 
 If you hang around in one of the big support channels on freenode.net,
-then this script will make you more efficient.
+then this script is for you. It automatically detects whether a
+channel is a big room and will start to hide only the
+join/part/nickchange messages which are unrelated.
 
-It automatically detects whether a channel is a big room by counting
-(roughly) the number of conversations goin on. If it is noisy, it will
-start to hide only the irrelevant join/part/nickchange messages.
-
-It will also highlight questions of newcomers, and highlight threads
-you are involved into, or threads of your choice.
+It will also highlight questions of newcomers, and threads you are
+involved into, and threads of your choice. The highlighting features
+can be disabled below.
 
 Commands:
 /act - displays the activity of the current channel
@@ -29,13 +28,11 @@ highlight_questions = True
 highlight_questions_color = 7
 highlight_questions_text = True # highlight the whole line?
 
-# (poor) thread support
 highlight_nicks = True # highlight nicks you're talking to, for a while
-highlight_nicks_points = 20 # lines
+highlight_nicks_points = 20 # lines after which highlighting turns off
 highlight_nicks_propagate = True # also highlight nicks he is talking to
-highlight_nicks_color = 11 # 9
+highlight_nicks_color = 9 # 11
 highlight_nicks_text = False # highlight the whole line?
-
 
 # show a demo of all color numbers when loading
 colortest = False
