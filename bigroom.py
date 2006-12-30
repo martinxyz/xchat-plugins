@@ -6,20 +6,18 @@ Big Room Plugin for XChat
 
 If you hang around in one of the big support channels on freenode.net,
 then this script is for you. It automatically detects whether a
-channel is a big room and will start to hide only the
-join/part/nickchange messages which are unrelated.
+channel is a big room and starts to hide only the join/part/nickchange
+messages which are unrelated.
 
-It will also highlight questions of newcomers, and threads you are
+It will also highlight questions of newcomers, threads you are
 involved into, and threads of your choice. The highlighting features
 can be disabled below.
 
 Commands:
 /act - displays the activity of the current channel
-/foc <somenick> - focus on that nick (highlight his threads for a while)
+/foc <somenick> - focus on that nick (highlight his threads)
 
-FIXME: auto-highlight treads is experimental; it might highlight too
-       much, too long and leak the highlighting into unrelated
-       threads. But it is still very useful.
+TODO: handle emotes. Emotes are just ignored for now.
 
 2006 Martin Renold (maxy on irc.freenode.net), public domain
 """
@@ -29,13 +27,17 @@ highlight_questions_color = 7
 highlight_questions_text = True # highlight the whole line?
 
 highlight_nicks = True # highlight nicks you're talking to, for a while
-highlight_nicks_points = 20 # lines after which highlighting turns off
-highlight_nicks_propagate = True # also highlight nicks he is talking to
-highlight_nicks_color = 9 # 11
+highlight_nicks_points = 99999 # 20 # lines after which highlighting turns off
+highlight_nicks_propagate = False # EXPERIMENTAL - also highlight nicks he is talking to, etc.
+highlight_nicks_color = 7 # 11 # 9
 highlight_nicks_text = False # highlight the whole line?
 
 # show a demo of all color numbers when loading
 colortest = False
+
+#FIXME: auto-highlight treads with highlight_nicks_propagete=True is
+#       experimental; it might highlight too much, too long and leak
+#       the highlighting into unrelated threads.
 
 
 ###############################################################################
@@ -46,7 +48,7 @@ colortest = False
 debug = False
 
 # If a nick has talked either less than (recent_lines) lines ago, or
-# less than (recent_time) seconds ago, it is considered active.
+
 # Note: a monolog is counted as one line.
 recent_lines_ignore1 = 50
 recent_time = 10*60
@@ -54,8 +56,8 @@ recent_time = 10*60
 # time constant (seconds); time to forget the activity of the channel
 activity_T = 15*60
 # tresholds when a channel is considered noisy (the "multilog" value in /act)
-noisy_lo = 9.0
-noisy_hi = 17.0
+noisy_lo = 7.0
+noisy_hi = 14.0
 
 if debug:
     noisy_lo = -2.0
@@ -145,11 +147,16 @@ class Context:
             self.line_ignore1 += 1
             self.ignore1.event()
             self.ignore1.nick = nick
+        else:
+            self.ignore1.update()
+
         if nick not in self.ignore2.nicks:
             self.ignore2.event()
             self.ignore2.nicks.append(nick)
             if len(self.ignore2.nicks) > 2:
                 self.ignore2.nicks.pop(0)
+        else:
+            self.ignore2.update()
 
         n = self.active_nicks.get(nick)
         if n is None:
@@ -203,8 +210,16 @@ class Context:
     def show_hidden_join(self, nick):
         for i, (nick2, t, word) in enumerate(self.hidden_joins):
             if nick2 == nick:
-                print '-->\t%s has joined (%d seconds ago)' % (nick, int(time() - t))
                 del self.hidden_joins[i]
+                dt = int(time() - t)
+                if dt > 6*60:
+                    # do as if he had been here forever
+                    return False
+                if dt/60.0 >= 2:
+                    dt = '%d minutes ago' % int(dt/60.0)
+                else:
+                    dt = '%d seconds ago' % int(dt)
+                print '-->\t%s has joined (%s)' % (nick, dt)
                 return True
         return False
 
@@ -217,6 +232,10 @@ class Context:
         if debug: print 'not watching', nick2, ' - not found'
         return None, None
 
+    def unwatch(self):
+        for nick, n in self.active_nicks.iteritems():
+            n.highlight = 0
+
     def clean_nick(self, nick2):
         for nick, n in self.active_nicks.iteritems():
             if nickeq(nick, nick2):
@@ -224,6 +243,10 @@ class Context:
         return None, None
 
     def __str__(self):
+        # update, just to get a bit faster feedback
+        self.ignore0.update()
+        self.ignore1.update()
+        self.ignore2.update()
         return 'active_nicks: %d, monolog: %.1f, dialog: %.1f, multilog: %.1f, noisy: %s' % (len(self.active_nicks), self.ignore0.activity, self.ignore1.activity, self.ignore2.activity, self.noisy)
         
 
@@ -355,11 +378,22 @@ def print_hook(word, word_eol, event):
             # you already got one...
             return
 
+        # talking to someone else?
         first_word = text.split()[0]
         if first_word.endswith(':') or first_word.endswith(','):
-            # you're talking to someone, you're not going to get a question highlight
-            n.question_highlighted = True
-            return
+            # could also be 'hi, I have a question...'
+
+            # if we have just seen you join (displayed a delayed join
+            # message, that is), then you are worth highlighting
+
+            # do we know the person you're talking to?
+            nick2 = first_word[:-1].strip()
+            nick2, n2 = c.clean_nick(nick2)
+
+            if n2:
+                # you're talking to someone we know, you're not going to get a question highlight
+                n.question_highlighted = True
+                return
 
         if t - n.first_time < 60:
             # you just joined the talk, or started talking <60s ago
@@ -369,7 +403,10 @@ def print_hook(word, word_eol, event):
             if len(text) > 25 and n.join_seen:
                 highlight = True
             if c.line < 25 and not n.join_seen:
-                return # we're not yet listening long enough to make a good decision
+                # we're not yet listening long enough to make a good decision
+                # let's assume you are in the middle of a conversation
+                n.question_highlighted = True
+                return
             if highlight:
                 n.question_highlighted = True
                 if not highlight_questions: return
@@ -393,6 +430,7 @@ def show_activity(word, word_eol, userdata):
     print 'activity %s - %s' % (xchat.get_info('channel') or '<no channel>', c)
     return xchat.EAT_ALL 
 
+focus_firsttime = True
 def focus(word, word_eol, userdata): 
     c = get_context()
     if not c:
@@ -403,20 +441,34 @@ def focus(word, word_eol, userdata):
         print 'Enabling nick highlighting for this channel and session.'
     c.highlight_nicks_when_quiet = True
 
-    if len(word) > 2:
-        nick, points = c.watch_nick(word[1], int(word[2]))
-    else:
+    nick = None
+    if len(word) == 1:
+        c.unwatch()
+    elif len(word) == 2:
         nick, points = c.watch_nick(word[1])
+    else:
+        nick, points = c.watch_nick(word[1], int(word[2]))
 
     if nick:
-        print 'Focussing on', nick, 'with', points, 'points'
+        print 'Focussing on', nick,
+        if points < 100:
+            print 'with', points, 'points',
+        global focus_firsttime 
+        if focus_firsttime:
+            focus_firsttime = False
+            print '(use /foc to stop)'
+        else:
+            print
     else:
-        print 'No such nick among the active talkers!'
+        if len(word) == 1:
+            print 'No longer focussing.'
+        else:
+            print 'No such nick among the active talkers!'
 
     return xchat.EAT_ALL 
  
 xchat.hook_command("ACT", show_activity, help="/ACT - show activity average of current tab") 
-xchat.hook_command("FOC", focus, help="/FOC nick [lines] - focus on (highlight) the discussion that nick is having; optionally give the maximum number of lines to highlight")
+xchat.hook_command("FOC", focus, help="/FOC [nick] [lines] - focus on (highlight) the discussion that nick is having; optionally give the maximum number of lines to highlight. Without arguments, stop the highlighting.")
 
 
 # persistency
@@ -448,3 +500,5 @@ if colortest:
 
 if debug:
     print 'debug mode - all channels are considered noisy'
+
+print "bigroom.py ready"
