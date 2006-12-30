@@ -165,9 +165,11 @@ class Context:
             n.question_highlighted = False
             n.highlight = 0
             n.join_seen = self.show_hidden_join(nick)
+            n.lines = 0
         n.last_line = self.line
         n.last_line_ignore1 = self.line_ignore1
         n.last_time = t
+        n.lines += 1
 
         if not self.noisy and self.ignore2.activity > noisy_hi:
             print '---\tnoisy channel, hiding irrelevant joins/parts/nickchanges'
@@ -395,8 +397,9 @@ def print_hook(word, word_eol, event):
                 n.question_highlighted = True
                 return
 
-        if t - n.first_time < 60:
-            # you just joined the talk, or started talking <60s ago
+        if t - n.first_time < 1*60 or n.lines < 3:
+            #                         ^^^^^^^^^^^ allow to say "hi" first
+            # you just joined the talk
             highlight = False
             if len(text) > 15 and '?' in text:
                 highlight = True
