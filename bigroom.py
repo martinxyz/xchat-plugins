@@ -16,6 +16,10 @@ can be disabled below.
 Commands:
 /act - displays the activity of the current channel
 /foc <somenick> - focus on that nick (highlight his threads)
+/foc - without arguments, stop the highlighting
+
+Not new, but good to know anyway:
+/lastlog text - search the current tab for text
 
 TODO: handle emotes. Emotes are just ignored for now.
 
@@ -35,19 +39,21 @@ highlight_nicks_text = False # highlight the whole line?
 # show a demo of all color numbers when loading
 colortest = False
 
-#FIXME: auto-highlight treads with highlight_nicks_propagete=True is
-#       experimental; it might highlight too much, too long and leak
-#       the highlighting into unrelated threads.
+# tresholds when a channel is considered noisy (the "multilog" value in /act)
+noisy_lo = 2.5 # noisy ==> quiet
+noisy_hi = 9.0 # quiet ==> noisy
 
+# display when messages are hidden
+debug = False
 
 ###############################################################################
 # You can configure the hairy stuff below, but the defaults should work fine. #
 ###############################################################################
 
-# display when messages are hidden
-debug = False
+#FIXME: auto-highlight treads with highlight_nicks_propagete=True is
+#       experimental; it might highlight too much, too long and leak
+#       the highlighting into unrelated threads.
 
-# If a nick has talked either less than (recent_lines) lines ago, or
 
 # Note: a monolog is counted as one line.
 recent_lines_ignore1 = 50
@@ -55,11 +61,9 @@ recent_time = 10*60
 
 # time constant (seconds); time to forget the activity of the channel
 activity_T = 15*60
-# tresholds when a channel is considered noisy (the "multilog" value in /act)
-noisy_lo = 2.0
-noisy_hi = 9.0
 
 if debug:
+    print 'debug mode - all channels are considered noisy'
     noisy_lo = -2.0
     noisy_hi = -1.0
 
@@ -500,8 +504,5 @@ def activity_store_save():
 if colortest:
     for i in range(20):
         print 'Color', i, ': ' + COLOR + str(i) + 'Blah' + BOLD + ' Blah' + RESET + 'end.'
-
-if debug:
-    print 'debug mode - all channels are considered noisy'
 
 print "bigroom.py ready"
