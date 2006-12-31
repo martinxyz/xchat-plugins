@@ -29,7 +29,7 @@ highlight_questions_text = True # highlight the whole line?
 highlight_nicks = True # highlight nicks you're talking to, for a while
 highlight_nicks_points = 99999 # 20 # lines after which highlighting turns off
 highlight_nicks_propagate = False # EXPERIMENTAL - also highlight nicks he is talking to, etc.
-highlight_nicks_color = 7 # 11 # 9
+highlight_nicks_color = 7
 highlight_nicks_text = False # highlight the whole line?
 
 # show a demo of all color numbers when loading
@@ -56,8 +56,8 @@ recent_time = 10*60
 # time constant (seconds); time to forget the activity of the channel
 activity_T = 15*60
 # tresholds when a channel is considered noisy (the "multilog" value in /act)
-noisy_lo = 7.0
-noisy_hi = 14.0
+noisy_lo = 2.0
+noisy_hi = 9.0
 
 if debug:
     noisy_lo = -2.0
