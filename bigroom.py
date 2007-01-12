@@ -83,6 +83,16 @@ UNDERLINE = '\037'
 def nickeq(a, b):
     return xchat.nickcmp(a, b) == 0
 
+def get_talk_partner(text):
+    l = text.split()
+    if not l: return None
+    first_word = l[0]
+    if first_word.endswith(':') or first_word.endswith(','):
+        return first_word[:-1].strip()
+    else:
+        return None
+
+
 class ActivityCounter:
     "floating average"
     def __init__(self, T=activity_T):
@@ -165,6 +175,7 @@ class Context:
         n = self.active_nicks.get(nick)
         if n is None:
             n = self.active_nicks[nick] = Nick()
+            n.name = nick
             n.first_time = t
             n.question_highlighted = False
             n.highlight = 0
@@ -213,9 +224,10 @@ class Context:
         if len(self.hidden_joins) > 20:
             self.hidden_joins.pop(0)
 
+
     def show_hidden_join(self, nick):
         for i, (nick2, t, word) in enumerate(self.hidden_joins):
-            if nick2 == nick:
+            if nickeq(nick2, nick):
                 del self.hidden_joins[i]
                 dt = int(time() - t)
                 if dt > 6*60:
@@ -225,7 +237,14 @@ class Context:
                     dt = '%d minutes ago' % int(dt/60.0)
                 else:
                     dt = '%d seconds ago' % int(dt)
-                print '-->\t%s has joined (%s)' % (nick, dt)
+                print '-->\t%s has joined (%s)' % (nick2, dt)
+
+                # showing a hidden join always counts as an event if
+                # the nick did not say anything (to make sure we also
+                # show the part)
+                if nick2 not in self.active_nicks:
+                    self.event(nick2)
+                
                 return True
         return False
 
@@ -244,9 +263,10 @@ class Context:
 
     def clean_nick(self, nick2):
         for nick, n in self.active_nicks.iteritems():
+            assert n.name == nick
             if nickeq(nick, nick2):
-                return nick, n
-        return None, None
+                return n
+        return None
 
     def __str__(self):
         # update, just to get a bit faster feedback
@@ -281,12 +301,13 @@ def print_hook(word, word_eol, event):
         c.event(nick)
 
         # talking to someone else?
-        nick2, n2 = None, None
         text = word[1]
-        first_word = text.split()[0]
-        if first_word.endswith(':') or first_word.endswith(','):
-            nick2 = first_word[:-1].strip()
-            nick2, n2 = c.clean_nick(nick2)
+        nick2 = get_talk_partner(text)
+        if nick2:
+            n2 = c.clean_nick(nick2)
+        else:
+            n2 = None
+        del nick2
 
         if c.highlight_nicks_when_quiet or (highlight_nicks and c.noisy):
             n = c.active_nicks[nick]
@@ -301,7 +322,7 @@ def print_hook(word, word_eol, event):
                     n2.highlight -= 1
 
                 if n2 and highlight_nicks_propagate:
-                    c.watch_nick(nick2, n.highlight)
+                    c.watch_nick(n2.name, n.highlight)
                     c.watch_nick(nick, n2.highlight)
                     
                 # make sure he doesn't get a question highlight later
@@ -320,9 +341,8 @@ def print_hook(word, word_eol, event):
     if event == 'Your Message':
         # let's see whom you're talking to
         text = word[1]
-        first_word = text.split()[0]
-        if first_word.endswith(':') or first_word.endswith(','):
-            nick2 = first_word[:-1].strip()
+        nick2 = get_talk_partner(text)
+        if nick2:
             c.watch_nick(nick2)
 
     if event == 'Channel Msg Hilight':
@@ -349,7 +369,9 @@ def print_hook(word, word_eol, event):
                     a = nick.lower()
                     b = nick2.lower()
                     if a.startswith(b) or b.startswith(a):
-                        # show this join
+                        # show this join, and count this join as
+                        # activity, to make sure we also show the part
+                        c.event(nick)
                         return
         # maybe we want to show the join later
         c.register_hidden_join(nick, word)
@@ -361,15 +383,25 @@ def print_hook(word, word_eol, event):
         oldnick = nick
         if oldnick in c.active_nicks:
             if newnick in c.active_nicks:
-                pass # fine
+                # fine. one event for both of you.
+                c.event(oldnick)
+                c.event(newnick)
             else:
-                c.active_nicks[newnick] = c.active_nicks[oldnick]
+                # "real" nickchange of an active user. one event for you
+                n = c.active_nicks[oldnick]
                 del c.active_nicks[oldnick]
+                c.active_nicks[newnick] = n
+                n.name = newnick
+                c.event(newnick)
         elif newnick in c.active_nicks:
             # inactive user changes his nick to a name with activity
             # (happens when someone rejoins, then kills his ghost, and changes to the correct nick)
             # this is usually relevant for the discussion
-            c.show_hidden_join(oldnick)
+
+            # one event for both of you.
+            # this will automatically show hidden joins
+            c.event(newnick)
+            c.event(oldnick)
         else:
             # there is no need to show this nickchange, even if he starts talking after this
             if debug: print '(hiding nickchange %s ==> %s)' % (oldnick, newnick)
@@ -380,26 +412,29 @@ def print_hook(word, word_eol, event):
         n = c.active_nicks[nick]
         t = time()
 
-        if n.question_highlighted:
-            # you already got one...
-            return
-
         # talking to someone else?
-        first_word = text.split()[0]
-        if first_word.endswith(':') or first_word.endswith(','):
-            # could also be 'hi, I have a question...'
+        nick2 = get_talk_partner(text)
+
+        if nick2:
+            c.show_hidden_join(nick2)
+
+            # could also be 'hi, I have a question...', where 'hi' is
+            # interpreted as talk partner
 
             # if we have just seen you join (displayed a delayed join
             # message, that is), then you are worth highlighting
 
             # do we know the person you're talking to?
-            nick2 = first_word[:-1].strip()
-            nick2, n2 = c.clean_nick(nick2)
+            n2 = c.clean_nick(nick2)
 
             if n2:
                 # you're talking to someone we know, you're not going to get a question highlight
                 n.question_highlighted = True
                 return
+
+        if n.question_highlighted:
+            # you already got one...
+            return
 
         if t - n.first_time < 1*60 or n.lines < 3:
             #                         ^^^^^^^^^^^ allow to say "hi" first
