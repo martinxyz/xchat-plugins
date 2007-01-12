@@ -1,5 +1,5 @@
 __module_name__ = "bigroom"
-__module_version__ = "1.0"
+__module_version__ = "1.1"
 __module_description__ = "hide irrelevant join/part/nickchanges in noisy channels, highlight newcomer questions"
 """
 Big Room Plugin for XChat
