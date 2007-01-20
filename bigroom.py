@@ -31,7 +31,7 @@ highlight_questions_color = 7
 highlight_questions_text = True # highlight the whole line?
 
 highlight_nicks = True # highlight nicks you're talking to, for a while
-highlight_nicks_points = 99999 # 20 # lines after which highlighting turns off
+highlight_nicks_points = 99999 # lines after which highlighting turns off
 highlight_nicks_propagate = False # EXPERIMENTAL - also highlight nicks he is talking to, etc.
 highlight_nicks_color = 7
 highlight_nicks_text = False # highlight the whole line?
