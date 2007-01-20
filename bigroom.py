@@ -4,10 +4,10 @@ __module_description__ = "hide irrelevant join/part/nickchanges in noisy channel
 """
 Big Room Plugin for XChat
 
-If you hang around in one of the big support channels on freenode.net,
-then this script is for you. It automatically detects whether a
-channel is a big room and starts to hide only the join/part/nickchange
-messages which are unrelated.
+If you hang around in one of the big support channels, then this
+script is for you. It automatically detects whether a channel is a big
+room and starts to hide only the join/part/nickchange messages which
+are irrelevant for the discussion.
 
 It will also highlight questions of newcomers, threads you are
 involved into, and threads of your choice. The highlighting features
