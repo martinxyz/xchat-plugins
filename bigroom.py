@@ -1,27 +1,21 @@
 __module_name__ = "bigroom"
-__module_version__ = "1.1"
-__module_description__ = "hide irrelevant join/part/nickchanges in noisy channels, highlight newcomer questions"
+__module_version__ = "1.2"
+__module_description__ = "This script recognizes noisy channels. In those channels, questions/messages that start a new discussion thread are (usually) recognized and highlighted. This makes it easy to get an overview over the current discussions. Join/part/nickchange messages are hidden if the corresponding nicks are not involved into the discussion."
 """
 Big Room Plugin for XChat
 
-If you hang around in one of the big support channels, then this
-script is for you. It automatically detects whether a channel is a big
-room and starts to hide only the join/part/nickchange messages which
-are irrelevant for the discussion.
-
-It will also highlight questions of newcomers, threads you are
-involved into, and threads of your choice. The highlighting features
-can be disabled below.
+This script automatically detects whether a channel is a big room and
+starts to hide only the irrelevant join/part/nickchange messages. It
+can also highlight questions of newcomers and nicks of your
+choice. You can configure this below.
 
 Commands:
 /act - displays the activity of the current channel
-/foc <somenick> - focus on that nick (highlight his threads)
+/foc <somenick> - focus on that nick (him any everyone talking to him threads)
 /foc - without arguments, stop the highlighting
 
-Not new, but good to know anyway:
+Not new, but good to know:
 /lastlog text - search the current tab for text
-
-TODO: handle emotes. Emotes are just ignored for now.
 
 2006 Martin Renold (maxy on irc.freenode.net), public domain
 """
@@ -30,11 +24,8 @@ highlight_questions = True
 highlight_questions_color = 7
 highlight_questions_text = True # highlight the whole line?
 
-highlight_nicks = True # highlight nicks you're talking to, for a while
-highlight_nicks_points = 99999 # lines after which highlighting turns off
-highlight_nicks_propagate = False # EXPERIMENTAL - also highlight nicks he is talking to, etc.
-highlight_nicks_color = 7
-highlight_nicks_text = False # highlight the whole line?
+# TODO: wire this
+#hide_nickchanges
 
 # show a demo of all color numbers when loading
 colortest = False
@@ -43,21 +34,18 @@ colortest = False
 noisy_lo = 2.5 # noisy ==> quiet
 noisy_hi = 9.0 # quiet ==> noisy
 
-# display when messages are hidden
-debug = False
+# print all messages that would be hidden with an explanation
+debug = True
 
 ###############################################################################
 # You can configure the hairy stuff below, but the defaults should work fine. #
 ###############################################################################
 
-#FIXME: auto-highlight treads with highlight_nicks_propagete=True is
-#       experimental; it might highlight too much, too long and leak
-#       the highlighting into unrelated threads.
-
-
 # Note: a monolog is counted as one line.
 recent_lines_ignore1 = 50
 recent_time = 10*60
+
+slience_required_for_question_highlight = 60*60*24 # 30*60
 
 # time constant (seconds); time to forget the activity of the channel
 activity_T = 15*60
@@ -133,7 +121,6 @@ class Context:
         self.hidden_joins = []
 
         self.noisy = False
-        self.highlight_nicks_when_quiet = False
 
         if identity in activity_store:
             d = activity_store[identity]
@@ -181,6 +168,11 @@ class Context:
             n.highlight = 0
             n.join_seen = self.show_hidden_join(nick)
             n.lines = 0
+        else:
+            # reset stale question highlight blockers
+            if t - n.last_time > slience_required_for_question_highlight:
+                n.question_highlighted = False
+
         n.last_line = self.line
         n.last_line_ignore1 = self.line_ignore1
         n.last_time = t
@@ -248,19 +240,6 @@ class Context:
                 return True
         return False
 
-    def watch_nick(self, nick2, points=highlight_nicks_points):
-        for nick, n in self.active_nicks.iteritems():
-            if nickeq(nick, nick2):
-                n.highlight = max(points, n.highlight)
-                if debug: print 'watching', nick, 'with', n.highlight, 'points'
-                return nick, n.highlight
-        if debug: print 'not watching', nick2, ' - not found'
-        return None, None
-
-    def unwatch(self):
-        for nick, n in self.active_nicks.iteritems():
-            n.highlight = 0
-
     def clean_nick(self, nick2):
         for nick, n in self.active_nicks.iteritems():
             assert n.name == nick
@@ -309,54 +288,17 @@ def print_hook(word, word_eol, event):
             n2 = None
         del nick2
 
-        if c.highlight_nicks_when_quiet or (highlight_nicks and c.noisy):
-            n = c.active_nicks[nick]
-            t = time()
-
-            if n.highlight or (n2 and n2.highlight):
-                if n.highlight:
-                    n.highlight -= 1
-                    if n2 and n2.highlight > n.highlight:
-                        n2.highlight -= 1
-                else:
-                    n2.highlight -= 1
-
-                if n2 and highlight_nicks_propagate:
-                    c.watch_nick(n2.name, n.highlight)
-                    c.watch_nick(nick, n2.highlight)
-                    
-                # make sure he doesn't get a question highlight later
-                n.question_highlighted = True
-
-                if event == 'Channel Msg Hilight':
-                    return # no need for more hilight
-
-                if highlight_nicks_text:
-                    #print COLOR+'2<'+COLOR+str(highlight_nicks_color)+nick+COLOR+'2>'+RESET+'\t'+COLOR+str(highlight_nicks_color)+text+RESET
-                    print COLOR+'2<'+RESET+nick+COLOR+'2>'+RESET+'\t'+COLOR+str(highlight_nicks_color)+text+RESET
-                else:
-                    print COLOR+'2<'+COLOR+str(highlight_nicks_color)+nick+COLOR+'2>'+RESET+'\t'+text+RESET
-                return xchat.EAT_XCHAT
-
     if event == 'Your Message':
         # let's see whom you're talking to
         text = word[1]
         nick2 = get_talk_partner(text)
-        if nick2:
-            c.watch_nick(nick2)
 
-    if event == 'Channel Msg Hilight':
-        c.watch_nick(nick)
-
-    if not c.noisy: return # display everything
+    if not c.noisy: return
 
     #print 'nick=', nick, 'word=', word
 
     if event in ['Part', 'Part with Reason', 'Quit'] and nick not in c.active_nicks:
         if debug: print '(hiding part/quit of %s)' % nick
-        #print '<%C10-%C11-%O\t$1 %C14(%O$2%C14)%C bleh left $3 %C14(%O$4%C14)%O '
-        #c = chr(3)
-        #print 'before_tab\tafter_tab '+c+'10c10'+c+'11c11'
         return xchat.EAT_XCHAT
 
     if event == 'Join' and nick not in c.active_nicks:
@@ -472,46 +414,7 @@ def show_activity(word, word_eol, userdata):
     print 'activity %s - %s' % (xchat.get_info('channel') or '<no channel>', c)
     return xchat.EAT_ALL 
 
-focus_firsttime = True
-def focus(word, word_eol, userdata): 
-    c = get_context()
-    if not c:
-        print 'no channel tab'
-        return
-
-    if not c.highlight_nicks_when_quiet and not c.noisy:
-        print 'Enabling nick highlighting for this channel and session.'
-    c.highlight_nicks_when_quiet = True
-
-    nick = None
-    if len(word) == 1:
-        c.unwatch()
-    elif len(word) == 2:
-        nick, points = c.watch_nick(word[1])
-    else:
-        nick, points = c.watch_nick(word[1], int(word[2]))
-
-    if nick:
-        print 'Focussing on', nick,
-        if points < 100:
-            print 'with', points, 'points',
-        global focus_firsttime 
-        if focus_firsttime:
-            focus_firsttime = False
-            print '(use /foc to stop)'
-        else:
-            print
-    else:
-        if len(word) == 1:
-            print 'No longer focussing.'
-        else:
-            print 'No such nick among the active talkers!'
-
-    return xchat.EAT_ALL 
- 
 xchat.hook_command("ACT", show_activity, help="/ACT - show activity average of current tab") 
-xchat.hook_command("FOC", focus, help="/FOC [nick] [lines] - focus on (highlight) the discussion that nick is having; optionally give the maximum number of lines to highlight. Without arguments, stop the highlighting.")
-
 
 # persistency
 
