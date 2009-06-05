@@ -1,6 +1,6 @@
 __module_name__ = "bigroom"
 __module_version__ = "1.3"
-__module_description__ = "Script to highlight new questions and hide irrelevant join/part messages in noisy channels."
+__module_description__ = "Highlight new questions and hide irrelevant join/part messages in noisy channels."
 """
 Big Room Plugin for XChat
 
