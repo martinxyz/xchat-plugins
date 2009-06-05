@@ -1,41 +1,39 @@
 __module_name__ = "bigroom"
-__module_version__ = "1.2"
-__module_description__ = "This script recognizes noisy channels. In those channels, questions/messages that start a new discussion thread are (usually) recognized and highlighted. This makes it easy to get an overview over the current discussions. Join/part/nickchange messages are hidden if the corresponding nicks are not involved into the discussion."
+__module_version__ = "1.3"
+__module_description__ = "Script to highlight new questions and hide irrelevant join/part messages in noisy channels."
 """
 Big Room Plugin for XChat
 
-This script automatically detects whether a channel is a big room and
-starts to hide only the irrelevant join/part/nickchange messages. It
-can also highlight questions of newcomers and nicks of your
-choice. You can configure this below.
+This script detects whether a channel is a big room and starts to hide
+only the irrelevant join/part/nickchange messages for those
+channels. It will also try hard to highlight questions that start a
+new discussion thread. You can configure this below.
 
-Commands:
+New command:
 /act - displays the activity of the current channel
-/foc <somenick> - focus on that nick (him any everyone talking to him threads)
-/foc - without arguments, stop the highlighting
 
-Not new, but good to know:
+Not a new command, but good to know:
 /lastlog text - search the current tab for text
 
-2006 Martin Renold (maxy on irc.freenode.net), public domain
+2006-2009 Martin Renold (maxy on irc.freenode.net), public domain
 """
 
 highlight_questions = True
 highlight_questions_color = 7
 highlight_questions_text = True # highlight the whole line?
 
-# TODO: wire this
-#hide_nickchanges
-
 # show a demo of all color numbers when loading
 colortest = False
 
 # tresholds when a channel is considered noisy (the "multilog" value in /act)
-noisy_lo = 2.5 # noisy ==> quiet
-noisy_hi = 9.0 # quiet ==> noisy
+noisy_lo = 2.5 # transition noisy ==> quiet
+noisy_hi = 9.0 # transition quiet ==> noisy
 
-# print all messages that would be hidden with an explanation
-debug = True
+# enable this if you don't want to wait until noisy channels get recognized
+all_channels_are_noisy = False
+
+# print all join/part/etc. messages that would be hidden with an explanation
+debug = False
 
 ###############################################################################
 # You can configure the hairy stuff below, but the defaults should work fine. #
@@ -50,8 +48,8 @@ slience_required_for_question_highlight = 60*60*24 # 30*60
 # time constant (seconds); time to forget the activity of the channel
 activity_T = 15*60
 
-if debug:
-    print 'debug mode - all channels are considered noisy'
+if all_channels_are_noisy:
+    print 'DEBUG - all channels are considered noisy'
     noisy_lo = -2.0
     noisy_hi = -1.0
 
@@ -129,7 +127,7 @@ class Context:
             self.ignore1.activity = d['ignore1']
             self.ignore2.activity = d['ignore2']
             if self.noisy:
-                print '---\tknown noisy channel, hiding irrelevant joins/parts/nickchanges'
+                print '---\tbigroom.py: known noisy channel, hiding irrelevant joins/parts/nickchanges'
 
     def restored(self):
         # hack to ignore the big time gap
@@ -179,12 +177,12 @@ class Context:
         n.lines += 1
 
         if not self.noisy and self.ignore2.activity > noisy_hi:
-            print '---\tnoisy channel, hiding irrelevant joins/parts/nickchanges'
+            print '---\tbigroom.py: channel is noisy, hiding irrelevant joins/parts/nickchanges'
             self.noisy = True
 
         if t - self.last_update > 60:
             if self.noisy and self.ignore2.activity < noisy_lo:
-                print '---\tchannel is quiet, showing every join/part'
+                print '---\tbigroom.py: channel is quiet, showing every join/part'
                 self.noisy = False
 
             # throw out inactive nicks
@@ -424,8 +422,15 @@ try:
     activity_store = pickle.load(open(activity_store_filename, 'rb'))
 except:
     activity_store = {}
-    print "Failed. Starting from zero."
-    print "Be patient, it will take a few minutes until a big room is recognized."
+    print "Not found. Starting from zero."
+    print "---"
+    print "Looks like this is the first you use bigroom.py."
+    print "Be patient, it can take a few hours until a channel is recognized as noisy."
+    print "You can use the /act command in each channel to see some statistics."
+    print COLOR+str(highlight_questions_color) + "This is the color that will be used for highlighted questions." + RESET
+    print "You can change it by editing " + __file__
+    print "---"
+
 
 save_time = time()
 def activity_store_save():
@@ -443,4 +448,4 @@ if colortest:
     for i in range(20):
         print 'Color', i, ': ' + COLOR + str(i) + 'Blah' + BOLD + ' Blah' + RESET + 'end.'
 
-print "bigroom.py ready"
+print "bigroom.py loaded"
