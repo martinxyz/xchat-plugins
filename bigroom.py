@@ -99,12 +99,14 @@ class Nick:
 class Context:
     "wraps and tracks an xchat context (a tab)"
     def __init__(self, identity):
+        # ignoreJ = watch join/part
         # ignore0 = watch every line
         # ignore1 = ignore monologs
         # ignore2 = ignore dialogs
 
         self.identity = identity
 
+        self.ignoreJ = ActivityCounter()
         self.ignore0 = ActivityCounter()
         self.ignore1 = ActivityCounter()
         self.ignore2 = ActivityCounter()
@@ -123,6 +125,7 @@ class Context:
         if identity in activity_store:
             d = activity_store[identity]
             self.noisy = d['noisy']
+            self.ignoreJ.activity = d.get('ignoreJ', 0.0)
             self.ignore0.activity = d['ignore0']
             self.ignore1.activity = d['ignore1']
             self.ignore2.activity = d['ignore2']
@@ -131,50 +134,57 @@ class Context:
 
     def restored(self):
         # hack to ignore the big time gap
+        self.ignoreJ.last_t = time()
         self.ignore0.last_t = time()
         self.ignore1.last_t = time()
         self.ignore2.last_t = time()
 
 
-    def event(self, nick):
+    def event(self, nick, talk=True):
         t = time()
         self.line += 1
 
-        self.ignore0.event()
-
-        if nick != self.ignore1.nick:
-            self.line_ignore1 += 1
-            self.ignore1.event()
-            self.ignore1.nick = nick
+        if not talk:
+            self.ignoreJ.event()
+            #channel = self.identity[0]
+            #print '--- channel has %d users' % channel.usersk
+            #open('/tmp/ddddd', 'w').write(str(dir(channel)))
         else:
-            self.ignore1.update()
+            self.ignore0.event()
 
-        if nick not in self.ignore2.nicks:
-            self.ignore2.event()
-            self.ignore2.nicks.append(nick)
-            if len(self.ignore2.nicks) > 2:
-                self.ignore2.nicks.pop(0)
-        else:
-            self.ignore2.update()
+            if nick != self.ignore1.nick:
+                self.line_ignore1 += 1
+                self.ignore1.event()
+                self.ignore1.nick = nick
+            else:
+                self.ignore1.update()
 
-        n = self.active_nicks.get(nick)
-        if n is None:
-            n = self.active_nicks[nick] = Nick()
-            n.name = nick
-            n.first_time = t
-            n.question_highlighted = False
-            n.highlight = 0
-            n.join_seen = self.show_hidden_join(nick)
-            n.lines = 0
-        else:
-            # reset stale question highlight blockers
-            if t - n.last_time > slience_required_for_question_highlight:
+            if nick not in self.ignore2.nicks:
+                self.ignore2.event()
+                self.ignore2.nicks.append(nick)
+                if len(self.ignore2.nicks) > 2:
+                    self.ignore2.nicks.pop(0)
+            else:
+                self.ignore2.update()
+
+            n = self.active_nicks.get(nick)
+            if n is None:
+                n = self.active_nicks[nick] = Nick()
+                n.name = nick
+                n.first_time = t
                 n.question_highlighted = False
+                n.highlight = 0
+                n.join_seen = self.show_hidden_join(nick)
+                n.lines = 0
+            else:
+                # reset stale question highlight blockers
+                if t - n.last_time > slience_required_for_question_highlight:
+                    n.question_highlighted = False
 
-        n.last_line = self.line
-        n.last_line_ignore1 = self.line_ignore1
-        n.last_time = t
-        n.lines += 1
+            n.last_line = self.line
+            n.last_line_ignore1 = self.line_ignore1
+            n.last_time = t
+            n.lines += 1
 
         if not self.noisy and self.ignore2.activity > noisy_hi:
             print '---\tbigroom.py: channel is noisy, hiding irrelevant joins/parts/nickchanges'
@@ -202,6 +212,7 @@ class Context:
 
         d = activity_store[self.identity]
         d['noisy'] = self.noisy 
+        d['ignoreJ'] = self.ignoreJ.activity 
         d['ignore0'] = self.ignore0.activity 
         d['ignore1'] = self.ignore1.activity 
         d['ignore2'] = self.ignore2.activity 
@@ -247,10 +258,11 @@ class Context:
 
     def __str__(self):
         # update, just to get a bit faster feedback
+        self.ignoreJ.update()
         self.ignore0.update()
         self.ignore1.update()
         self.ignore2.update()
-        return 'active_nicks: %d, monolog: %.1f, dialog: %.1f, multilog: %.1f, noisy: %s' % (len(self.active_nicks), self.ignore0.activity, self.ignore1.activity, self.ignore2.activity, self.noisy)
+        return 'active_nicks: %d, joinpart: %.1f, monolog: %.1f, dialog: %.1f, multilog: %.1f, noisy: %s' % (len(self.active_nicks), self.ignoreJ.activity, self.ignore0.activity, self.ignore1.activity, self.ignore2.activity, self.noisy)
         
 
 contexts = {}
@@ -285,6 +297,10 @@ def print_hook(word, word_eol, event):
         else:
             n2 = None
         del nick2
+    elif event in ['Part', 'Part with Reason', 'Quit', 'Join']:
+        # note: we later record this same event as a "normal" event
+        # too if the nick was an active talker
+        c.event(nick, talk=False)
 
     if event == 'Your Message':
         # let's see whom you're talking to
