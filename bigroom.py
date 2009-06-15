@@ -25,7 +25,10 @@ highlight_questions_text = True # highlight the whole line?
 # show a demo of all color numbers when loading
 colortest = False
 
-# tresholds when a channel is considered noisy (the "multilog" value in /act)
+# user tresholds when a channel is considered noisy (the number of users)
+numusers_lo = 40 # transition noisy ==> quiet
+numusers_hi = 60 # transition quiet ==> noisy
+# talk tresholds when a channel is considered noisy (the "multilog" value in /act)
 noisy_lo = 2.5 # transition noisy ==> quiet
 noisy_hi = 9.0 # transition quiet ==> noisy
 
@@ -146,9 +149,6 @@ class Context:
 
         if not talk:
             self.ignoreJ.event()
-            #channel = self.identity[0]
-            #print '--- channel has %d users' % channel.usersk
-            #open('/tmp/ddddd', 'w').write(str(dir(channel)))
         else:
             self.ignore0.event()
 
@@ -186,13 +186,20 @@ class Context:
             n.last_time = t
             n.lines += 1
 
-        if not self.noisy and self.ignore2.activity > noisy_hi:
-            print '---\tbigroom.py: channel is noisy, hiding irrelevant joins/parts/nickchanges'
+        # count channel users
+        res = xchat.get_list('users')
+        if res:
+            numusers = len(res)
+        else:
+            numusers = 0
+
+        if not self.noisy and (self.ignore2.activity > noisy_hi or numusers > numusers_hi):
+            print '---\tbigroom.py: channel is big or noisy, hiding irrelevant joins/parts/nickchanges'
             self.noisy = True
 
         if t - self.last_update > 60:
-            if self.noisy and self.ignore2.activity < noisy_lo:
-                print '---\tbigroom.py: channel is quiet, showing every join/part'
+            if self.noisy and (self.ignore2.activity < noisy_lo and numusers < numusers_lo):
+                print '---\tbigroom.py: channel is small and quiet, showing every join/part'
                 self.noisy = False
 
             # throw out inactive nicks
