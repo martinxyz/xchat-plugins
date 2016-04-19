@@ -52,7 +52,7 @@ slience_required_for_question_highlight = 60*60*24 # 30*60
 activity_T = 15*60
 
 if all_channels_are_noisy:
-    print 'DEBUG - all channels are considered noisy'
+    print('DEBUG - all channels are considered noisy')
     noisy_lo = -2.0
     noisy_hi = -1.0
 
@@ -60,7 +60,7 @@ import xchat
 import string, os
 from time import time
 from math import exp
-import cPickle as pickle
+import pickle as pickle
 
 BOLD = '\002'
 COLOR = '\003'
@@ -133,7 +133,7 @@ class Context:
             self.ignore1.activity = d['ignore1']
             self.ignore2.activity = d['ignore2']
             if self.noisy:
-                print '---\tbigroom.py: known noisy channel, hiding irrelevant joins/parts/nickchanges'
+                print('---\tbigroom.py: known noisy channel, hiding irrelevant joins/parts/nickchanges')
 
     def restored(self):
         # hack to ignore the big time gap
@@ -194,18 +194,18 @@ class Context:
             numusers = 0
 
         if not self.noisy and (self.ignore2.activity > noisy_hi or numusers > numusers_hi):
-            print '---\tbigroom.py: channel is big or noisy, hiding irrelevant joins/parts/nickchanges'
+            print('---\tbigroom.py: channel is big or noisy, hiding irrelevant joins/parts/nickchanges')
             self.noisy = True
 
         if t - self.last_update > 60:
             if self.noisy and (self.ignore2.activity < noisy_lo and numusers < numusers_lo):
-                print '---\tbigroom.py: channel is small and quiet, showing every join/part'
+                print('---\tbigroom.py: channel is small and quiet, showing every join/part')
                 self.noisy = False
 
             # throw out inactive nicks
             self.last_update = t
             new = {}
-            for nick, n in self.active_nicks.iteritems():
+            for nick, n in self.active_nicks.items():
                 d_line_ignore1 = self.line_ignore1 - n.last_line_ignore1
                 d_time = t - n.last_time
                 if d_line_ignore1 < recent_lines_ignore1 or d_time < recent_time:
@@ -245,7 +245,7 @@ class Context:
                     dt = '%d minutes ago' % int(dt/60.0)
                 else:
                     dt = '%d seconds ago' % int(dt)
-                print '-->\t%s has joined (%s)' % (nick2, dt)
+                print('-->\t%s has joined (%s)' % (nick2, dt))
 
                 # showing a hidden join always counts as an event if
                 # the nick did not say anything (to make sure we also
@@ -257,7 +257,7 @@ class Context:
         return False
 
     def clean_nick(self, nick2):
-        for nick, n in self.active_nicks.iteritems():
+        for nick, n in self.active_nicks.items():
             assert n.name == nick
             if nickeq(nick, nick2):
                 return n
@@ -319,7 +319,7 @@ def print_hook(word, word_eol, event):
     #print 'nick=', nick, 'word=', word
 
     if event in ['Part', 'Part with Reason', 'Quit'] and nick not in c.active_nicks:
-        if debug: print '(hiding part/quit of %s)' % nick
+        if debug: print('(hiding part/quit of %s)' % nick)
         return xchat.EAT_XCHAT
 
     if event == 'Join' and nick not in c.active_nicks:
@@ -338,7 +338,7 @@ def print_hook(word, word_eol, event):
                         return
         # maybe we want to show the join later
         c.register_hidden_join(nick, word)
-        if debug: print '(hiding join of %s)' % nick
+        if debug: print('(hiding join of %s)' % nick)
         return xchat.EAT_XCHAT
 
     if event == 'Change Nick':
@@ -367,7 +367,7 @@ def print_hook(word, word_eol, event):
             c.event(oldnick)
         else:
             # there is no need to show this nickchange, even if he starts talking after this
-            if debug: print '(hiding nickchange %s ==> %s)' % (oldnick, newnick)
+            if debug: print('(hiding nickchange %s ==> %s)' % (oldnick, newnick))
             return xchat.EAT_XCHAT
 
     if event == 'Channel Message':
@@ -416,9 +416,9 @@ def print_hook(word, word_eol, event):
                 n.question_highlighted = True
                 if not highlight_questions: return
                 if highlight_questions_text:
-                    print COLOR+'2<'+RESET+nick+COLOR+'2>'+RESET+'\t'+COLOR+str(highlight_questions_color)+text+RESET
+                    print(COLOR+'2<'+RESET+nick+COLOR+'2>'+RESET+'\t'+COLOR+str(highlight_questions_color)+text+RESET)
                 else:
-                    print COLOR+'2<'+COLOR+str(highlight_questions_color)+nick+COLOR+'2>'+RESET+'\t'+text+RESET
+                    print(COLOR+'2<'+COLOR+str(highlight_questions_color)+nick+COLOR+'2>'+RESET+'\t'+text+RESET)
 
                 return xchat.EAT_XCHAT
 
@@ -430,9 +430,9 @@ for s in ['Join', 'Part', 'Part with Reason', 'Quit', 'Change Nick', 'Channel Me
 def show_activity(word, word_eol, userdata): 
     c = get_context()
     if not c:
-        print 'no channel tab'
+        print('no channel tab')
         return
-    print 'activity %s - %s' % (xchat.get_info('channel') or '<no channel>', c)
+    print('activity %s - %s' % (xchat.get_info('channel') or '<no channel>', c))
     return xchat.EAT_ALL 
 
 xchat.hook_command("ACT", show_activity, help="/ACT - show activity average of current tab") 
@@ -441,25 +441,25 @@ xchat.hook_command("ACT", show_activity, help="/ACT - show activity average of c
 
 activity_store_filename = os.path.join(xchat.get_info("xchatdir"), 'bigroom.pik')
 try: 
-    print "Reading ", activity_store_filename
+    print("Reading ", activity_store_filename)
     activity_store = pickle.load(open(activity_store_filename, 'rb'))
 except:
     activity_store = {}
-    print "Not found. Starting from zero."
-    print "---"
-    print "Looks like this is the first you use bigroom.py."
-    print "Be patient, it can take a few hours until a channel is recognized as noisy."
-    print "You can use the /act command in each channel to see some statistics."
-    print COLOR+str(highlight_questions_color) + "This is the color that will be used for highlighted questions." + RESET
-    print "You can change it by editing " + __file__
-    print "---"
+    print("Not found. Starting from zero.")
+    print("---")
+    print("Looks like this is the first you use bigroom.py.")
+    print("Be patient, it can take a few hours until a channel is recognized as noisy.")
+    print("You can use the /act command in each channel to see some statistics.")
+    print(COLOR+str(highlight_questions_color) + "This is the color that will be used for highlighted questions." + RESET)
+    print("You can change it by editing " + __file__)
+    print("---")
 
 
 save_time = time()
 def activity_store_save():
     global save_time
     if time() - save_time > 2*60:
-        if debug: print 'writing', activity_store_filename
+        if debug: print('writing', activity_store_filename)
         pickle.dump(activity_store, open(activity_store_filename, 'wb'))
         save_time = time()
         
@@ -469,6 +469,6 @@ def activity_store_save():
 
 if colortest:
     for i in range(20):
-        print 'Color', i, ': ' + COLOR + str(i) + 'Blah' + BOLD + ' Blah' + RESET + 'end.'
+        print('Color', i, ': ' + COLOR + str(i) + 'Blah' + BOLD + ' Blah' + RESET + 'end.')
 
-print "bigroom.py loaded"
+print("bigroom.py loaded")

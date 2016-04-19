@@ -22,7 +22,7 @@ def privmsg(word, word_eol, userdata):
  
 xchat.hook_server("PRIVMSG", privmsg)
 
-print "AntiAway ready."
+print("AntiAway ready.")
 
 #for name in dir(xchat):
 #    print name, '=', xchat.__dict__[name]
